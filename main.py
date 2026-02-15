@@ -1,12 +1,13 @@
 """
 بوت أسئلة مادة أنشطة الإدارة في الإسلام
 المستوى الأول - الترم الثاني
-الأسئلة الكاملة من PDF
+نسخة متطورة مع مؤقت وتقارير
 """
 
 import logging
 import os
 import asyncio
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
@@ -17,6 +18,7 @@ logging.basicConfig(
 )
 
 TOKEN = os.environ.get('BOT_TOKEN', '8550588818:AAHkdtokih3ndkVHYNEEMo__8mKBQsg1tH0')
+TIME_LIMIT = 30  # 30 ثانية لكل سؤال
 
 # ==================== بنك الأسئلة الكامل ====================
 
@@ -443,6 +445,21 @@ TF_EXTRA = [
     }
 ]
 
+# ==================== قاموس الأسئلة ====================
+QUESTION_SETS = {
+    'mcq_7_8': MCQ_7_8,
+    'tf_7_8': TF_7_8,
+    'mcq_9_10_1': MCQ_9_10_P1,
+    'mcq_9_10_2': MCQ_9_10_P2,
+    'tf_9_10_1': TF_9_10_P1,
+    'tf_9_10_2': TF_9_10_P2,
+    'mcq_extra': MCQ_EXTRA,
+    'tf_extra': TF_EXTRA
+}
+
+# ==================== تخزين نتائج المستخدمين ====================
+user_results = {}
+
 # ==================== دوال البوت ====================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -455,118 +472,167 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📝 الدرس 9-10 صح وخطأ 1", callback_data='tf_9_10_1')],
         [InlineKeyboardButton("📝 الدرس 9-10 صح وخطأ 2", callback_data='tf_9_10_2')],
         [InlineKeyboardButton("📚 الدروس التكميلية اختيار", callback_data='mcq_extra')],
-        [InlineKeyboardButton("📝 الدروس التكميلية صح وخطأ", callback_data='tf_extra')]
+        [InlineKeyboardButton("📝 الدروس التكميلية صح وخطأ", callback_data='tf_extra')],
+        [InlineKeyboardButton("📊 إحصائياتي", callback_data='my_stats')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
         "🌟 **بوت أسئلة أنشطة الإدارة في الإسلام** 🌟\n\n"
-        "اختر نوع الأسئلة التي تريد اختبار نفسك فيها:",
+        "⚡ لديك 30 ثانية للإجابة على كل سؤال\n"
+        "📊 سيتم حفظ نتائجك لعرض إحصائياتك\n\n"
+        "اختر نوع الأسئلة:",
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
+
+async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """عرض إحصائيات المستخدم"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    if user_id in user_results and user_results[user_id]:
+        stats = user_results[user_id][-1]  # آخر نتيجة
+        text = f"📊 **آخر اختبار لك:**\n"
+        text += f"📚 المجموعة: {stats['set_name']}\n"
+        text += f"✅ النتيجة: {stats['score']} من {stats['total']}\n"
+        text += f"📈 النسبة: {stats['percentage']:.1f}%\n"
+        text += f"🕐 التاريخ: {stats['date']}\n\n"
+        
+        # إحصائيات عامة
+        total_tests = len(user_results[user_id])
+        avg_score = sum(r['percentage'] for r in user_results[user_id]) / total_tests
+        text += f"📋 **إحصائياتك العامة:**\n"
+        text += f"عدد الاختبارات: {total_tests}\n"
+        text += f"المعدل العام: {avg_score:.1f}%"
+    else:
+        text = "📊 لا توجد إحصائيات بعد. قم بإجراء اختبار أولاً!"
+    
+    keyboard = [[InlineKeyboardButton("🔙 العودة", callback_data='back_to_menu')]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالج الأزرار الرئيسية"""
     query = update.callback_query
     await query.answer()
     
-    # تحديد مجموعة الأسئلة المختارة
-    question_sets = {
-        'mcq_7_8': MCQ_7_8,
-        'tf_7_8': TF_7_8,
-        'mcq_9_10_1': MCQ_9_10_P1,
-        'mcq_9_10_2': MCQ_9_10_P2,
-        'tf_9_10_1': TF_9_10_P1,
-        'tf_9_10_2': TF_9_10_P2,
-        'mcq_extra': MCQ_EXTRA,
-        'tf_extra': TF_EXTRA
-    }
+    if query.data == 'my_stats':
+        await show_stats(update, context)
+        return
     
-    if query.data in question_sets:
-        context.user_data['questions'] = question_sets[query.data]
+    if query.data == 'back_to_menu':
+        await start(update, context)
+        return
+    
+    if query.data in QUESTION_SETS:
+        # بدء اختبار جديد
+        context.user_data['questions'] = QUESTION_SETS[query.data]
         context.user_data['current'] = 0
         context.user_data['score'] = 0
-        context.user_data['total'] = len(question_sets[query.data])
+        context.user_data['total'] = len(QUESTION_SETS[query.data])
         context.user_data['type'] = 'mcq' if query.data.startswith('mcq') else 'tf'
+        context.user_data['set_name'] = query.data
+        
+        # إلغاء أي مؤقت سابق
+        if 'timer_task' in context.user_data:
+            context.user_data['timer_task'].cancel()
+        
         await send_question(query, context)
 
 async def send_question(query, context):
-    """إرسال السؤال الحالي"""
+    """إرسال السؤال الحالي مع مؤقت"""
     idx = context.user_data['current']
     questions = context.user_data['questions']
     
     if idx >= len(questions):
-        # انتهى الاختبار
-        score = context.user_data['score']
-        total = context.user_data['total']
-        percentage = (score / total) * 100
-        
-        if percentage >= 90:
-            result = "ممتاز! 🎉"
-        elif percentage >= 75:
-            result = "جيد جداً! 👍"
-        elif percentage >= 60:
-            result = "مقبول 👌"
-        else:
-            result = "تحتاج للمراجعة 📚"
-        
-        keyboard = [[InlineKeyboardButton("🔙 العودة للقائمة", callback_data='back')]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            f"🎯 **انتهى الاختبار!**\n\n"
-            f"{result}\n"
-            f"نتيجتك: {score} من {total}\n"
-            f"النسبة: {percentage:.1f}%",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
+        await end_quiz(query, context)
         return
     
     q = questions[idx]
     
+    # إنشاء مؤقت جديد
+    loop = asyncio.get_event_loop()
+    timer_task = loop.create_task(question_timer(query, context, idx))
+    context.user_data['timer_task'] = timer_task
+    context.user_data['current_question_idx'] = idx
+    
     if context.user_data['type'] == 'mcq':
         keyboard = []
         for opt in q['options']:
-            keyboard.append([InlineKeyboardButton(opt, callback_data=f"ans_{opt[0]}")])
-        keyboard.append([InlineKeyboardButton("❌ إنهاء", callback_data='back')])
+            keyboard.append([InlineKeyboardButton(opt, callback_data=f"ans_{opt[0]}_{idx}")])
+        keyboard.append([InlineKeyboardButton("❌ إنهاء", callback_data='end_quiz')])
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(
-            f"**السؤال {idx+1}/{context.user_data['total']}**\n\n{q['question']}",
+            f"**السؤال {idx+1}/{context.user_data['total']}**\n"
+            f"⏱️ الوقت المتبقي: 30 ثانية\n\n"
+            f"{q['question']}",
             reply_markup=reply_markup,
             parse_mode='Markdown'
         )
     else:
         keyboard = [
-            [InlineKeyboardButton("✅ صحيح", callback_data='ans_صحيح')],
-            [InlineKeyboardButton("❌ خطأ", callback_data='ans_خطأ')],
-            [InlineKeyboardButton("❌ إنهاء", callback_data='back')]
+            [InlineKeyboardButton("✅ صحيح", callback_data=f"ans_صحيح_{idx}")],
+            [InlineKeyboardButton("❌ خطأ", callback_data=f"ans_خطأ_{idx}")],
+            [InlineKeyboardButton("❌ إنهاء", callback_data='end_quiz')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(
-            f"**السؤال {idx+1}/{context.user_data['total']}**\n\n{q['question']}",
+            f"**السؤال {idx+1}/{context.user_data['total']}**\n"
+            f"⏱️ الوقت المتبقي: 30 ثانية\n\n"
+            f"{q['question']}",
             reply_markup=reply_markup,
             parse_mode='Markdown'
         )
+
+async def question_timer(query, context, question_idx):
+    """مؤقت السؤال - بعد 30 ثانية ينتقل للسؤال التالي"""
+    try:
+        await asyncio.sleep(TIME_LIMIT)
+        
+        # تأكد أننا مازلنا في نفس السؤال
+        if (context.user_data.get('current') == question_idx and 
+            context.user_data.get('current_question_idx') == question_idx):
+            
+            # انتقل للسؤال التالي تلقائياً
+            context.user_data['current'] += 1
+            await query.edit_message_text(
+                f"⏱️ انتهى الوقت! الانتقال للسؤال التالي...",
+                parse_mode='Markdown'
+            )
+            await asyncio.sleep(1)
+            await send_question(query, context)
+    except asyncio.CancelledError:
+        pass
 
 async def answer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالج الإجابات"""
     query = update.callback_query
     await query.answer()
     
-    if query.data == 'back':
-        await start(update, context)
+    if query.data == 'end_quiz':
+        await end_quiz(query, context)
         return
     
     if query.data.startswith('ans_'):
-        answer = query.data[4:]
+        # إلغاء المؤقت
+        if 'timer_task' in context.user_data:
+            context.user_data['timer_task'].cancel()
+        
+        # استخراج البيانات
+        parts = query.data.split('_')
+        answer = parts[1]
+        question_idx = int(parts[2])
+        
         idx = context.user_data['current']
         questions = context.user_data['questions']
-        q = questions[idx]
         
+        # تأكد أن السؤال صحيح
+        if idx != question_idx:
+            return
+        
+        q = questions[idx]
         is_correct = (answer == q['correct'])
         
         if is_correct:
@@ -575,23 +641,74 @@ async def answer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             feedback = f"❌ **إجابة خاطئة**\nالإجابة الصحيحة: **{q['correct']}**"
         
+        # الانتقال للسؤال التالي
         context.user_data['current'] += 1
         
         await query.edit_message_text(feedback, parse_mode='Markdown')
         await asyncio.sleep(1)
         await send_question(query, context)
 
+async def end_quiz(query, context):
+    """إنهاء الاختبار وعرض التقرير"""
+    # إلغاء المؤقت
+    if 'timer_task' in context.user_data:
+        context.user_data['timer_task'].cancel()
+    
+    score = context.user_data.get('score', 0)
+    total = context.user_data.get('total', 0)
+    percentage = (score / total) * 100 if total > 0 else 0
+    
+    # تخزين النتيجة
+    user_id = query.from_user.id
+    if user_id not in user_results:
+        user_results[user_id] = []
+    
+    result = {
+        'set_name': context.user_data.get('set_name', 'اختبار'),
+        'score': score,
+        'total': total,
+        'percentage': percentage,
+        'date': datetime.now().strftime('%Y-%m-%d %H:%M')
+    }
+    user_results[user_id].append(result)
+    
+    # رسالة النتيجة
+    if percentage >= 90:
+        level = "🏆 ممتاز! مستوى متقدم"
+    elif percentage >= 75:
+        level = "🎯 جيد جداً! مستوى مرتفع"
+    elif percentage >= 60:
+        level = "📘 مقبول، يمكنك التحسن"
+    else:
+        level = "📚 تحتاج للمراجعة"
+    
+    report = f"🎯 **نتيجة الاختبار**\n\n"
+    report += f"✅ الإجابات الصحيحة: {score}\n"
+    report += f"❌ الإجابات الخاطئة: {total - score}\n"
+    report += f"📊 النسبة المئوية: {percentage:.1f}%\n"
+    report += f"🏅 التقييم: {level}\n\n"
+    report += f"📝 تم حفظ نتيجتك في إحصائياتك"
+    
+    keyboard = [
+        [InlineKeyboardButton("📊 إحصائياتي", callback_data='my_stats')],
+        [InlineKeyboardButton("🔄 اختبار جديد", callback_data='back_to_menu')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(report, reply_markup=reply_markup, parse_mode='Markdown')
+
 # ==================== تشغيل البوت ====================
 def main():
     """النقطة الرئيسية لتشغيل البوت"""
-    print("🚀 تشغيل بوت الأسئلة...")
+    print("🚀 تشغيل بوت الأسئلة المتطور...")
     print(f"✅ التوكن: {TOKEN[:10]}...")
+    print(f"⏱️ مهلة الإجابة: {TIME_LIMIT} ثانية")
     
     app = Application.builder().token(TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button_handler, pattern='^(mcq_|tf_|back)$'))
-    app.add_handler(CallbackQueryHandler(answer_handler, pattern='^ans_|^back$'))
+    app.add_handler(CallbackQueryHandler(button_handler, pattern='^(mcq_|tf_|back_to_menu|my_stats)$'))
+    app.add_handler(CallbackQueryHandler(answer_handler, pattern='^ans_|^end_quiz$'))
     
     print("✅ البوت يعمل الآن...")
     app.run_polling()
