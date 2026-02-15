@@ -1,24 +1,21 @@
 # bot.py - ملف البوت الرئيسي
 import os
-import json
 import random
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler,
-    ConversationHandler, ContextTypes, filters
+    ContextTypes, filters
 )
 
 # ===== إعدادات البوت =====
-TOKEN = "YOUR_BOT_TOKEN_HERE"  # ضع توكن البوت هنا
+TOKEN = "8550588818:AAHkdtokih3ndkVHYNEEMo__8mKBQsg1tH0"  # توكنك هنا
 
 # ===== قاعدة البيانات في الذاكرة =====
 user_data = {}
 quiz_sessions = {}
 
 # ===== أسئلة البوت (قابلة للتوسع) =====
-# يمكنك إضافة المزيد من الأسئلة هنا بسهولة
-
 QUIZ_QUESTIONS = [
     # ===== أسئلة صح/خطأ =====
     {
@@ -91,29 +88,6 @@ QUIZ_QUESTIONS = [
         "options": ["الصِّناعَةُ التَّحويلِيَّة", "إِنتاجُ البُذورِ وَالمَشاتِلِ", "تَصنيعُ الحَراثاتِ وَالحَصّاداتِ"],
         "answer": 0,
         "explanation": "الصِّناعَةُ التَّحويلِيَّةُ تَضيفُ قيمَةً كَبيرَةً لِلزِّراعَةِ"
-    },
-    
-    # ===== أسئلة ملء الفراغات =====
-    {
-        "type": "fill_blank",
-        "question": "قال الإمام علي (ع): (ثُمَّ انظُرْ فِي أُمورِ عِمالِكَ، فَاستَعملْهُمُ اختِباراً وَلا تُوَلِّهِمْ مُحاباةً وَأَثَرَةً، فَإِنَّهُما جِماعٌ مِن شُعَبِ الجَورِ وَالخِيانَةِ)",
-        "blank_word": "الجور",
-        "hint": "ضد العدل",
-        "explanation": "المحاباة والأثرة من شعاب الجور والخيانة"
-    },
-    {
-        "type": "fill_blank",
-        "question": "قال الإمام علي (ع): (وَلا تُطَوِّلَنَّ اِحتِجابَكَ عَن رَعِيَّتِكَ، فَإِنَّ اِحتِجابَ الوُلاةِ عَن رَعِيَّتِهِمْ شُعْبَةٌ مِنَ الضَّيقِ وَعَمىً عَنِ الأُمورِ)",
-        "blank_word": "الضيق",
-        "hint": "ضد السعة",
-        "explanation": "الاحتجاب يورث الضيق والعمى عن الأمور"
-    },
-    {
-        "type": "fill_blank",
-        "question": "قال الإمام علي (ع): (وَاجْعَلْ لِرَأْسِ كُلِّ أَمْرٍ مِنْ أُمُورِكَ رَأْساً مِنْهُمْ، لا يَقْهَرُهُ كَبِيرُهَا، وَلا يَيْأَسُ مِنْهُ صَغِيرُهَا)",
-        "blank_word": "رأساً",
-        "hint": "مسؤول",
-        "explanation": "يجب تعيين مسؤول لكل أمر"
     }
 ]
 
@@ -122,7 +96,7 @@ QUIZ_QUESTIONS = [
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """بدء البوت"""
     user_id = update.effective_user.id
-    username = update.effective_user.username or "مستخدم"
+    username = update.effective_user.first_name or "مستخدم"
     
     # تهيئة بيانات المستخدم
     if user_id not in user_data:
@@ -138,16 +112,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🎯 بدء الاختبار", callback_data="start_quiz")],
         [InlineKeyboardButton("📊 إحصائياتي", callback_data="stats")],
-        [InlineKeyboardButton("ℹ️ المساعدة", callback_data="help")]
+        [InlineKeyboardButton("ℹ️ المساعدة", callback_data="help_menu")]
     ]
     
     welcome_text = f"""
 👋 أهلاً وسهلاً بك *{username}* في بوت اختبارات أنشطة الإدارة في الإسلام!
 
-📚 هذا البوت يتيح لك:
-• أسئلة صح/خطأ
-• أسئلة اختيار من متعدد  
-• أسئلة ملء الفراغات
+📚 *هذا البوت يتيح لك:*
+• أسئلة صح/خطأ ✅❌
+• أسئلة اختيار من متعدد 📝  
+• نظام نقاط وسلاسل 🔥
 
 🎯 اضغط "بدء الاختبار" للبدء!
 """
@@ -158,65 +132,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """عرض المساعدة"""
-    help_text = """
-📖 *كيفية استخدام البوت:*
-
-1️⃣ اضغط "بدء الاختبار" لبدء جلسة جديدة
-2️⃣ اختر نوع الأسئلة المفضل (أو اختبار شامل)
-3️⃣ أجب على الأسئلة بالضغط على الأزرار
-4️⃣ في أسئلة الفراغات، اكتب الإجابة مباشرة
-
-📊 *النقاط:*
-• كل إجابة صحيحة = 10 نقاط
-• الإجابة الصحيحة من أول مرة = 5 نقاط إضافية
-• سلسلة الإجابات الصحيحة = مضاعف النقاط!
-
-🔄 *الأوامر المتاحة:*
-/start - بدء البوت
-/quiz - بدء اختبار جديد
-/stats - إحصائياتك
-/leaderboard - لوحة المتصدرين
-"""
-    await update.message.reply_text(help_text, parse_mode="Markdown")
-
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """عرض إحصائيات المستخدم"""
-    user_id = update.effective_user.id
-    
-    if user_id not in user_data:
-        await update.message.reply_text("❌ لم تبدأ أي اختبار بعد! اضغط /start")
-        return
-    
-    stats = user_data[user_id]
-    accuracy = (stats["correct_answers"] / stats["total_quizzes"] * 100) if stats["total_quizzes"] > 0 else 0
-    
-    stats_text = f"""
-📊 *إحصائياتك:*
-
-👤 المستخدم: {stats['username']}
-📅 تاريخ الانضمام: {stats['join_date'][:10]}
-
-🎯 إجمالي الأسئلة: {stats['total_quizzes']}
-✅ الإجابات الصحيحة: {stats['correct_answers']}
-📈 نسبة الصحة: {accuracy:.1f}%
-🔥 أطول سلسلة: {stats['streak']}
-🏆 أفضل نتيجة: {stats['best_score']}
-"""
-    await update.message.reply_text(stats_text, parse_mode="Markdown")
-
-# ===== نظام الاختبارات =====
-
-async def start_quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """بدء الاختبار من الزر"""
-    query = update.callback_query
- أفضل نتيجة: {stats['best_score']}
-"""
-    await update.message.reply_text(stats_text, parse_mode="Markdown")
-
-# ===== نظام الاختبارات =====
-
 async def start_quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """بدء الاختبار من الزر"""
     query = update.callback_query
@@ -225,8 +140,7 @@ async def start_quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     keyboard = [
         [InlineKeyboardButton("✅ صح/خطأ", callback_data="quiz_tf")],
         [InlineKeyboardButton("📝 اختيار من متعدد", callback_data="quiz_mc")],
-        [InlineKeyboardButton("🔤 ملء الفراغات", callback_data="quiz_fb")],
-        [InlineKeyboardButton("🎲 اختبار شامل (كل الأنواع)", callback_data="quiz_all")]
+        [InlineKeyboardButton("🎲 اختبار شامل", callback_data="quiz_all")]
     ]
     
     await query.edit_message_text(
@@ -250,13 +164,11 @@ async def select_quiz_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
         questions = [q for q in QUIZ_QUESTIONS if q["type"] == "true_false"]
     elif quiz_type == "mc":
         questions = [q for q in QUIZ_QUESTIONS if q["type"] == "multiple_choice"]
-    elif quiz_type == "fb":
-        questions = [q for q in QUIZ_QUESTIONS if q["type"] == "fill_blank"]
     else:
         questions = QUIZ_QUESTIONS.copy()
     
     random.shuffle(questions)
-    questions = questions[:10]  # 10 أسئلة فقط
+    questions = questions[:5]  # 5 أسئلة فقط للاختبار
     
     # إنشاء جلسة اختبار
     quiz_sessions[user_id] = {
@@ -308,32 +220,17 @@ async def send_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 row = []
         if row:
             keyboard.append(row)
-            
-    elif question["type"] == "fill_blank":
-        text = header + f"🔤 *املأ الفراغ:*\n\n{question['question']}\n\n💡 تلميح: {question['hint']}"
-        text += "\n\n✏️ اكتب إجابتك مباشرة..."
-        keyboard = [[InlineKeyboardButton("🔄 تخطي", callback_data="skip_question")]]
-        
-        # تخزين أننا في وضع انتظار رسالة
-        session["waiting_for_text"] = True
-        
-    else:
-        return
     
     # إضافة أزرار مساعدة
-    keyboard.append([InlineKeyboardButton("🛑 إنهاء الاختبار", callback_data="end_quiz")])
+    keyboard.append([InlineKeyboardButton("🛑 إنهاء", callback_data="end_quiz")])
     
-    if isinstance(update, Update):
-        if update.callback_query:
-            await update.callback_query.edit_message_text(
-                text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
-            )
-        else:
-            await update.message.reply_text(
-                text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
-            )
+    # تحديث الرسالة
+    if update.callback_query:
+        await update.callback_query.edit_message_text(
+            text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
+        )
     else:
-        await update.edit_message_text(
+        await update.message.reply_text(
             text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
         )
 
@@ -346,7 +243,7 @@ async def handle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session = quiz_sessions.get(user_id)
     
     if not session:
-        await query.edit_message_text("❌ انتهت الجلسة! ابدأ من جديد /quiz")
+        await query.edit_message_text("❌ انتهت الجلسة! ابدأ من جديد /start")
         return
     
     answer_data = query.data.replace("answer_", "")
@@ -365,31 +262,7 @@ async def handle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await process_answer(update, context, is_correct, current_q)
 
-async def handle_text_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة إجابة نصية (ملء الفراغات)"""
-    user_id = update.effective_user.id
-    session = quiz_sessions.get(user_id)
-    
-    if not session or not session.get("waiting_for_text"):
-        return  # ليس في وضع اختبار
-    
-    current_q = session["questions"][session["current"]]
-    
-    if current_q["type"] != "fill_blank":
-        return
-    
-    user_answer = update.message.text.strip()
-    correct_answer = current_q["blank_word"]
-    
-    # التحقق من الإجابة (غير حساس لحالة الأحرف)
-    is_correct = user_answer.lower() == correct_answer.lower()
-    
-    # إزالة وضع الانتظار
-    session["waiting_for_text"] = False
-    
-    await process_answer(update, context, is_correct, current_q, user_answer)
-
-async def process_answer(update, context, is_correct, question, user_answer=None):
+async def process_answer(update: Update, context: ContextTypes.DEFAULT_TYPE, is_correct, question):
     """معالجة الإجابة وتحديث النتائج"""
     user_id = update.effective_user.id
     session = quiz_sessions[user_id]
@@ -426,8 +299,6 @@ async def process_answer(update, context, is_correct, question, user_answer=None
         correct_text = "صح" if question["answer"] else "خطأ"
     elif question["type"] == "multiple_choice":
         correct_text = question["options"][question["answer"]]
-    elif question["type"] == "fill_blank":
-        correct_text = question["blank_word"]
     
     feedback = f"""
 {result_emoji} *{result_text}*
@@ -441,14 +312,9 @@ async def process_answer(update, context, is_correct, question, user_answer=None
     
     keyboard = [[InlineKeyboardButton("➡️ السؤال التالي", callback_data="next_question")]]
     
-    if isinstance(update, Update) and update.callback_query:
-        await update.callback_query.edit_message_text(
-            feedback, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
-        )
-    else:
-        await update.message.reply_text(
-            feedback, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
-        )
+    await update.callback_query.edit_message_text(
+        feedback, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
+    )
 
 async def next_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """الانتقال للسؤال التالي"""
@@ -493,20 +359,12 @@ async def show_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
         grade = "💪 حاول مرة أخرى"
         emoji = "📚"
     
-    duration = "غير معروف"
-    try:
-        start = datetime.fromisoformat(session["start_time"])
-        duration = str(datetime.now() - start).split(".")[0]
-    except:
-        pass
-    
     results_text = f"""
 {emoji} *نتائج اختبارك:*
 
 📊 الإجابات الصحيحة: *{correct}* من *{total}*
 📈 النسبة المئوية: *{percentage:.1f}%*
 🏆 مجموع النقاط: *{score}*
-⏱️ المدة: {duration}
 
 {grade}
 
@@ -515,23 +373,89 @@ async def show_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = [
         [InlineKeyboardButton("🔄 اختبار جديد", callback_data="start_quiz")],
-        [InlineKeyboardButton("📊 إحصائياتي", callback_data="stats")],
         [InlineKeyboardButton("🏠 القائمة الرئيسية", callback_data="main_menu")]
     ]
     
-    if isinstance(update, Update) and update.callback_query:
-        update.callback_query:
-        await update.callback_query.edit_message_text(
-            results_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
-        )
-    else:
-        await update.message.reply_text(
-            results_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
-        )
+    await update.callback_query.edit_message_text(
+        results_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
+    )
     
     # تنظيف الجلسة
     if user_id in quiz_sessions:
         del quiz_sessions[user_id]
+
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """عرض إحصائيات المستخدم"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    
+    if user_id not in user_data:
+        await query.edit_message_text("❌ لم تبدأ أي اختبار بعد! اضغط /start")
+        return
+    
+    stats_data = user_data[user_id]
+    accuracy = (stats_data["correct_answers"] / stats_data["total_quizzes"] * 100) if stats_data["total_quizzes"] > 0 else 0
+    
+    stats_text = f"""
+📊 *إحصائياتك:*
+
+👤 المستخدم: {stats_data['username']}
+📅 تاريخ الانضمام: {stats_data['join_date'][:10]}
+
+🎯 إجمالي الأسئلة: {stats_data['total_quizzes']}
+✅ الإجابات الصحيحة: {stats_data['correct_answers']}
+📈 نسبة الصحة: {accuracy:.1f}%
+🔥 أطول سلسلة: {stats_data['streak']}
+🏆 أفضل نتيجة: {stats_data['best_score']}
+"""
+    
+    keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="main_menu")]]
+    
+    await query.edit_message_text(
+        stats_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
+    )
+
+async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """العودة للقائمة الرئيسية"""
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [
+        [InlineKeyboardButton("🎯 بدء الاختبار", callback_data="start_quiz")],
+        [InlineKeyboardButton("📊 إحصائياتي", callback_data="stats")],
+        [InlineKeyboardButton("ℹ️ المساعدة", callback_data="help_menu")]
+    ]
+    
+    await query.edit_message_text(
+        "🏠 *القائمة الرئيسية*\n\nاختر ما تريد:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
+
+async def help_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """عرض المساعدة من القائمة"""
+    query = update.callback_query
+    await query.answer()
+    
+    help_text = """
+📖 *كيفية استخدام البوت:*
+
+1️⃣ اضغط "بدء الاختبار" لبدء جلسة جديدة
+2️⃣ اختر نوع الأسئلة المفضل
+3️⃣ أجب على الأسئلة بالضغط على الأزرار
+
+📊 *نظام النقاط:*
+• كل إجابة صحيحة = 10 نقاط
+• سلسلة الإجابات الصحيحة = مضاعف النقاط!
+"""
+    
+    keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="main_menu")]]
+    
+    await query.edit_message_text(
+        help_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
+    )
 
 async def end_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """إنهاء الاختبار مبكراً"""
@@ -568,58 +492,16 @@ async def confirm_end(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """العودة للقائمة الرئيسية"""
-    query = update.callback_query
-    await query.answer()
-    
-    keyboard = [
-        [InlineKeyboardButton("🎯 بدء الاختبار", callback_data="start_quiz")],
-        [InlineKeyboardButton("📊 إحصائياتي", callback_data="stats")],
-        [InlineKeyboardButton("ℹ️ المساعدة", callback_data="help_menu")]
-    ]
-    
-    await query.edit_message_text(
-        "🏠 *القائمة الرئيسية*\n\nاختر ما تريد:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="Markdown"
-    )
-
-async def help_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """عرض المساعدة من القائمة"""
-    query = update.callback_query
-    await query.answer()
-    
-    help_text = """
-📖 *كيفية استخدام البوت:*
-
-1️⃣ اضغط "بدء الاختبار" لبدء جلسة جديدة
-2️⃣ اختر نوع الأسئلة المفضل
-3️⃣ أجب على الأسئلة
-4️⃣ في أسئلة الفراغات، اكتب الإجابة مباشرة
-
-📊 *نظام النقاط:*
-• كل إجابة صحيحة = 10 نقاط
-• سلسلة الإجابات الصحيحة = مضاعف النقاط!
-"""
-    
-    keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="main_menu")]]
-    
-    await query.edit_message_text(
-        help_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
-    )
-
 # ===== التشغيل الرئيسي =====
 
 def main():
     """تشغيل البوت"""
+    print("🤖 تشغيل البوت...")
     application = Application.builder().token(TOKEN).build()
     
     # الأوامر
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("stats", stats))
-    application.add_handler(CommandHandler("quiz", start_quiz_callback))
     
     # معالجات الأزرار
     application.add_handler(CallbackQueryHandler(start_quiz_callback, pattern="^start_quiz$"))
@@ -630,14 +512,9 @@ def main():
     application.add_handler(CallbackQueryHandler(confirm_end, pattern="^confirm_end$"))
     application.add_handler(CallbackQueryHandler(main_menu, pattern="^main_menu$"))
     application.add_handler(CallbackQueryHandler(help_menu, pattern="^help_menu$"))
-    application.add_handler(CallbackQueryHandler(help_menu, pattern="^help$"))
     application.add_handler(CallbackQueryHandler(stats, pattern="^stats$"))
-    application.add_handler(CallbackQueryHandler(next_question, pattern="^skip_question$"))
     
-    # معالجة النصوص (لأسئلة الفراغات)
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_answer))
-    
-    print("🤖 البوت يعمل...")
+    print("✅ البوت يعمل على: @Mohamhassansufyan_bot")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
